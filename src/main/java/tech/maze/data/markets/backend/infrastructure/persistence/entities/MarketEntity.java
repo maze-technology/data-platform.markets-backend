@@ -1,7 +1,6 @@
 package tech.maze.data.markets.backend.infrastructure.persistence.entities;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -14,7 +13,10 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import tech.maze.data.markets.backend.domain.models.MarketType;
+import tech.maze.data.markets.backend.domain.models.SpecificData;
 
 /**
  * JPA entity for markets.
@@ -41,8 +43,9 @@ public class MarketEntity {
   @Column(nullable = false)
   private String quote;
 
-  @Embedded
-  private OptionSpecificDataEmbeddable optionSpecificData;
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "specific_data", columnDefinition = "jsonb")
+  private SpecificData specificData;
 
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;

@@ -23,8 +23,8 @@ class MarketDtoMapperTest {
         .hasMessageContaining("marketType must not be null");
     assertThat(marketTypeDtoMapper.toDto(MarketType.SPOT)).isEqualTo(tech.maze.dtos.markets.enums.Type.SPOT);
     assertThat(marketTypeDtoMapper.toDto(MarketType.PERP)).isEqualTo(tech.maze.dtos.markets.enums.Type.PERPETUAL);
-    assertThat(marketTypeDtoMapper.toDto(MarketType.FUTURES)).isEqualTo(tech.maze.dtos.markets.enums.Type.PERPETUAL);
-    assertThat(marketTypeDtoMapper.toDto(MarketType.OPTION)).isEqualTo(tech.maze.dtos.markets.enums.Type.PERPETUAL);
+    assertThat(marketTypeDtoMapper.toDto(MarketType.FUTURES)).isEqualTo(tech.maze.dtos.markets.enums.Type.FUTURE);
+    assertThat(marketTypeDtoMapper.toDto(MarketType.OPTION)).isEqualTo(tech.maze.dtos.markets.enums.Type.OPTION);
   }
 
   @Test
@@ -37,5 +37,7 @@ class MarketDtoMapperTest {
         .hasMessageContaining("marketType must be defined");
     assertThat(marketTypeDtoMapper.toDomain(tech.maze.dtos.markets.enums.Type.SPOT)).isEqualTo(MarketType.SPOT);
     assertThat(marketTypeDtoMapper.toDomain(tech.maze.dtos.markets.enums.Type.PERPETUAL)).isEqualTo(MarketType.PERP);
+    assertThat(marketTypeDtoMapper.toDomain(tech.maze.dtos.markets.enums.Type.FUTURE)).isEqualTo(MarketType.FUTURES);
+    assertThat(marketTypeDtoMapper.toDomain(tech.maze.dtos.markets.enums.Type.OPTION)).isEqualTo(MarketType.OPTION);
   }
 }
