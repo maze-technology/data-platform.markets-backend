@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Generated type.
+ * Market aggregate.
  */
 public record Market(
     UUID id,
@@ -12,6 +12,6 @@ public record Market(
     String exchange,
     String base,
     String quote,
-    OptionSpecificData optionSpecificData,
+    SpecificData specificData,
     Instant createdAt
 ) {}

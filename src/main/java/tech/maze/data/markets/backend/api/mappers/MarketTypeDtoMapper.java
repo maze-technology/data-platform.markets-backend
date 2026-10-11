@@ -21,8 +21,8 @@ public class MarketTypeDtoMapper {
     return switch (value) {
       case SPOT -> tech.maze.dtos.markets.enums.Type.SPOT;
       case PERP -> tech.maze.dtos.markets.enums.Type.PERPETUAL;
-      case FUTURES -> tech.maze.dtos.markets.enums.Type.PERPETUAL;
-      case OPTION -> tech.maze.dtos.markets.enums.Type.PERPETUAL;
+      case FUTURES -> tech.maze.dtos.markets.enums.Type.FUTURE;
+      case OPTION -> tech.maze.dtos.markets.enums.Type.OPTION;
       default -> throw new IllegalArgumentException("marketType must be defined");
     };
   }
@@ -38,6 +38,8 @@ public class MarketTypeDtoMapper {
     return switch (value) {
       case SPOT -> MarketType.SPOT;
       case PERPETUAL -> MarketType.PERP;
+      case FUTURE -> MarketType.FUTURES;
+      case OPTION -> MarketType.OPTION;
       case UNRECOGNIZED -> throw new IllegalArgumentException("marketType must be defined");
       default -> throw new IllegalArgumentException("marketType must be defined");
     };
