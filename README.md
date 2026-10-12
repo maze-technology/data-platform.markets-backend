@@ -2,8 +2,6 @@
 
 Backend service for the data markets domain, built with Spring Boot and Maze conventions.
 
-[![Continuous Integration (CI)](https://github.com/maze-technology/data-markets-backend/actions/workflows/publish.yaml/badge.svg?branch=main)](https://github.com/maze-technology/data-markets-backend/actions/workflows/publish.yaml)
-
 ## Quality
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=maze-technology_data-markets-backend&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=maze-technology_data-markets-backend)
