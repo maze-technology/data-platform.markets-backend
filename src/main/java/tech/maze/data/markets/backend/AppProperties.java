@@ -26,7 +26,8 @@ public class AppProperties {
   Sync sync = new Sync();
 
   /**
-   * Sync/fetch properties.
+   * Sync/fetch properties. Topic names are wiring concerns — override via
+   * {@code MARKETS_FETCH_REQUEST_TOPIC} / {@code MARKETS_FETCH_RESPONSE_TOPIC}.
    */
   @Data
   @FieldDefaults(level = AccessLevel.PRIVATE)

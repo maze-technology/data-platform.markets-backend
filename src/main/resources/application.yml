@@ -28,5 +28,25 @@ spring:
     enabled: true
   cache:
     enabled: false
+  cloud:
+    function:
+      definition: syncMarketsRequestConsumer;fetchMarketsResponseConsumer
+    stream:
+      bindings:
+        syncMarketsRequestConsumer-in-0:
+          destination: ${MARKETS_SYNC_REQUEST_TOPIC:markets.sync.request}
+          group: markets
+        fetchMarketsResponseConsumer-in-0:
+          destination: ${MARKETS_FETCH_RESPONSE_TOPIC:markets.fetch.response}
+          group: markets
+      kafka:
+        binder:
+          brokers: ${KAFKA_BROKERS:localhost:9092}
 maze:
   markets-per-page: 50
+  events:
+    enabled: true
+    source: urn:service:markets
+  sync:
+    fetch-request-topic: ${MARKETS_FETCH_REQUEST_TOPIC:markets.fetch.request}
+    fetch-response-topic: ${MARKETS_FETCH_RESPONSE_TOPIC:markets.fetch.response}
