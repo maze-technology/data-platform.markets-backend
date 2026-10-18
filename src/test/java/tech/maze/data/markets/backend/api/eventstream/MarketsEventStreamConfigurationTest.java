@@ -27,7 +27,10 @@ import org.springframework.beans.factory.ObjectProvider;
 import tech.maze.commons.eventstream.EventSender;
 import tech.maze.data.markets.backend.domain.models.SyncMarketsResult;
 import tech.maze.data.markets.backend.domain.ports.in.SyncMarketsUseCase;
+import tech.maze.dtos.markets.enums.Type;
 import tech.maze.dtos.markets.events.EventTypes;
+import tech.maze.dtos.markets.models.MarketMetaDatas;
+import tech.maze.dtos.markets.models.MarketMetaDatasMarket;
 import tech.maze.dtos.markets.payloads.FetchMarketsResponse;
 import tech.maze.dtos.markets.payloads.SyncMarketsResponse;
 
@@ -42,6 +45,9 @@ class MarketsEventStreamConfigurationTest {
   @Mock
   private SyncMarketsUseCase syncMarketsUseCase;
 
+  @Mock
+  private MarketMetaDatasEventService marketMetaDatasEventService;
+
   private MarketsEventStreamConfiguration configuration;
 
   @BeforeEach
@@ -49,7 +55,8 @@ class MarketsEventStreamConfigurationTest {
     configuration = new MarketsEventStreamConfiguration(
         eventSender,
         meterRegistryProvider,
-        syncMarketsUseCase
+        syncMarketsUseCase,
+        marketMetaDatasEventService
     );
   }
 
@@ -88,12 +95,27 @@ class MarketsEventStreamConfigurationTest {
   }
 
   @Test
-  void completesSyncAndRepliesOnFetchFanIn() {
+  void upsertsMetaAndCompletesSyncOnFetchFanIn() {
     Consumer<CloudEvent> consumer = configuration.fetchMarketsResponseConsumer();
+    final String providerId = "11111111-1111-1111-1111-111111111111";
+    MarketMetaDatas metaDatas = MarketMetaDatas.newBuilder()
+        .setDataProviderId(Value.newBuilder().setStringValue(providerId).build())
+        .setMarket(
+            MarketMetaDatasMarket.newBuilder()
+                .setType(Type.SPOT)
+                .setExchangeId(Value.newBuilder().setStringValue("binance").build())
+                .setBaseId(Value.newBuilder().setStringValue("BTC").build())
+                .setQuoteId(Value.newBuilder().setStringValue("USDT").build())
+                .build()
+        )
+        .putExtraDatas("k", "v")
+        .putToolBox("k", "v")
+        .build();
     FetchMarketsResponse response = FetchMarketsResponse.newBuilder()
         .setIsLast(true)
         .setSkipped(3)
         .setDataProvider(Value.newBuilder().setStringValue("dp-1").build())
+        .setMarketMetaDatas(metaDatas)
         .build();
     CloudEvent event = CloudEventBuilder.v1()
         .withId("evt-fetch")
@@ -105,24 +127,32 @@ class MarketsEventStreamConfigurationTest {
     when(eventSender.resolveCorrelationId(event)).thenReturn("corr-1");
     when(syncMarketsUseCase.onFetchResponse("corr-1", "dp-1", 3L, true))
         .thenReturn(Optional.of(new SyncMarketsResult(3L, "reply-topic")));
-    when(eventSender.send(eq("reply-topic"), any(SyncMarketsResponse.class), eq(EventTypes.SYNC_MARKETS_RESPONSE)))
-        .thenReturn(true);
+    when(
+        eventSender.send(
+            eq("reply-topic"),
+            any(SyncMarketsResponse.class),
+            eq(EventTypes.SYNC_MARKETS_RESPONSE)
+        )
+    ).thenReturn(true);
 
     consumer.accept(event);
 
-    verify(eventSender).send(eq("reply-topic"), any(SyncMarketsResponse.class), eq(EventTypes.SYNC_MARKETS_RESPONSE));
+    verify(marketMetaDatasEventService).process(metaDatas);
+    verify(eventSender).send(
+        eq("reply-topic"),
+        any(SyncMarketsResponse.class),
+        eq(EventTypes.SYNC_MARKETS_RESPONSE)
+    );
   }
 
   @Test
   void recordsMetricWhenSyncStartFails() {
-    Consumer<CloudEvent> consumer = configuration.syncMarketsRequestConsumer();
     CloudEvent event = CloudEventBuilder.v1()
         .withId("evt-sync")
         .withSource(URI.create("urn:test"))
         .withType(EventTypes.SYNC_MARKETS_REQUEST)
         .withData(BytesCloudEventData.wrap(new byte[0]))
         .build();
-
     when(eventSender.resolveCorrelationId(event)).thenReturn(null);
     when(eventSender.resolveReplyTo(event)).thenReturn("reply-topic");
     when(syncMarketsUseCase.startSync(anyString(), eq("reply-topic"))).thenReturn(false);
@@ -130,12 +160,21 @@ class MarketsEventStreamConfigurationTest {
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     when(meterRegistryProvider.getIfAvailable()).thenReturn(registry);
 
-    consumer.accept(event);
+    configuration.syncMarketsRequestConsumer().accept(event);
 
     assertEquals(
         1.0,
-        registry.counter("maze.events.reply.failed", "eventType", EventTypes.SYNC_MARKETS_REQUEST).count()
+        registry.counter(
+            "maze.events.reply.failed",
+            "eventType",
+            EventTypes.SYNC_MARKETS_REQUEST
+        ).count()
     );
-    verify(syncMarketsUseCase, never()).onFetchResponse(anyString(), anyString(), anyLong(), anyBoolean());
+    verify(syncMarketsUseCase, never()).onFetchResponse(
+        anyString(),
+        anyString(),
+        anyLong(),
+        anyBoolean()
+    );
   }
 }

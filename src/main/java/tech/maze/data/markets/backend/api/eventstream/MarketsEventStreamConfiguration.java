@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tech.maze.commons.eventstream.EventSender;
 import tech.maze.commons.eventstream.MazeEventProperties;
+import tech.maze.data.markets.backend.AppProperties;
 import tech.maze.data.markets.backend.domain.models.SyncMarketsResult;
 import tech.maze.data.markets.backend.domain.ports.in.SyncMarketsUseCase;
 import tech.maze.dtos.markets.events.EventTypes;
@@ -28,17 +29,19 @@ import tech.maze.dtos.markets.payloads.SyncMarketsResponse;
  * Event stream configuration for markets Sync/Fetch orchestration.
  *
  * <p>Flow: SyncMarketsRequest → fan-out FetchMarketsRequest on a fixed topic →
- * correlate FetchMarketsResponse by {@code correlationid} → SyncMarketsResponse.
+ * upsert MarketMetaDatas from each FetchMarketsResponse → correlate by
+ * {@code correlationid} → SyncMarketsResponse.
  */
 @Configuration
 @RequiredArgsConstructor
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-@EnableConfigurationProperties(MazeEventProperties.class)
+@EnableConfigurationProperties({MazeEventProperties.class, AppProperties.class})
 @Slf4j
 public class MarketsEventStreamConfiguration {
   EventSender eventSender;
   ObjectProvider<MeterRegistry> meterRegistryProvider;
   SyncMarketsUseCase syncMarketsUseCase;
+  MarketMetaDatasEventService marketMetaDatasEventService;
 
   /**
    * Handles SyncMarketsRequest: starts correlation and fans out FetchMarketsRequest.
@@ -70,7 +73,7 @@ public class MarketsEventStreamConfiguration {
   }
 
   /**
-   * Handles FetchMarketsResponse fan-in for in-flight sync sessions.
+   * Handles FetchMarketsResponse: upserts market metadata, then fans in sync completion.
    *
    * @return a consumer for CloudEvents
    */
@@ -93,6 +96,10 @@ public class MarketsEventStreamConfiguration {
         log.error("Failed to parse FetchMarketsResponse for event {}", event.getId(), ex);
         incrementFailure(EventTypes.FETCH_MARKETS_RESPONSE);
         return;
+      }
+
+      if (response.hasMarketMetaDatas()) {
+        marketMetaDatasEventService.process(response.getMarketMetaDatas());
       }
 
       final String correlationId = eventSender.resolveCorrelationId(event);
