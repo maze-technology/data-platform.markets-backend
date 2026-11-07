@@ -48,5 +48,6 @@ maze:
     enabled: true
     source: urn:service:markets
   sync:
+    response-topic: ${MARKETS_SYNC_RESPONSE_TOPIC:markets.sync.response}
     fetch-request-topic: ${MARKETS_FETCH_REQUEST_TOPIC:markets.fetch.request}
     fetch-response-topic: ${MARKETS_FETCH_RESPONSE_TOPIC:markets.fetch.response}

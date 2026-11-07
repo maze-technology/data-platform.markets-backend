@@ -27,11 +27,17 @@ public class AppProperties {
 
   /**
    * Sync/fetch properties. Topic names are wiring concerns — override via
-   * {@code MARKETS_FETCH_REQUEST_TOPIC} / {@code MARKETS_FETCH_RESPONSE_TOPIC}.
+   * {@code MARKETS_SYNC_RESPONSE_TOPIC} / {@code MARKETS_FETCH_REQUEST_TOPIC} /
+   * {@code MARKETS_FETCH_RESPONSE_TOPIC}.
    */
   @Data
   @FieldDefaults(level = AccessLevel.PRIVATE)
   public static class Sync {
+    /**
+     * Fixed Kafka topic for SyncMarketsResponse publication.
+     */
+    String responseTopic = "markets.sync.response";
+
     /**
      * Fixed Kafka topic for FetchMarketsRequest fan-out to data providers.
      */

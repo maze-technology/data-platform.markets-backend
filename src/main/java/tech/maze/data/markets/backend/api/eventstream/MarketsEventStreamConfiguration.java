@@ -5,6 +5,7 @@ import com.google.protobuf.Value;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.CloudEventData;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -30,7 +31,7 @@ import tech.maze.dtos.markets.payloads.SyncMarketsResponse;
  *
  * <p>Flow: SyncMarketsRequest → fan-out FetchMarketsRequest on a fixed topic →
  * upsert MarketMetaDatas from each FetchMarketsResponse → correlate by
- * {@code correlationid} → SyncMarketsResponse.
+ * {@code correlationid} → SyncMarketsResponse on a fixed topic.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -42,6 +43,7 @@ public class MarketsEventStreamConfiguration {
   ObjectProvider<MeterRegistry> meterRegistryProvider;
   SyncMarketsUseCase syncMarketsUseCase;
   MarketMetaDatasEventService marketMetaDatasEventService;
+  AppProperties appProperties;
 
   /**
    * Handles SyncMarketsRequest: starts correlation and fans out FetchMarketsRequest.
@@ -63,9 +65,8 @@ public class MarketsEventStreamConfiguration {
       final String correlationId = Optional.ofNullable(eventSender.resolveCorrelationId(event))
           .filter(id -> !id.isBlank())
           .orElseGet(() -> event.getId() == null ? UUID.randomUUID().toString() : event.getId());
-      final String replyTo = eventSender.resolveReplyTo(event);
 
-      final boolean started = syncMarketsUseCase.startSync(correlationId, replyTo);
+      final boolean started = syncMarketsUseCase.startSync(correlationId);
       if (!started) {
         incrementFailure(EventTypes.SYNC_MARKETS_REQUEST);
       }
@@ -73,7 +74,7 @@ public class MarketsEventStreamConfiguration {
   }
 
   /**
-   * Handles FetchMarketsResponse: upserts market metadata, then fans in sync completion.
+   * Handles FetchMarketsResponse: upserts asset metadata, then fans in sync completion.
    *
    * @return a consumer for CloudEvents
    */
@@ -112,23 +113,17 @@ public class MarketsEventStreamConfiguration {
       );
 
       completed.ifPresent(result -> {
-        final String replyTo = result.replyTo();
-        if (replyTo == null || replyTo.isBlank()) {
-          log.info(
-              "Sync {} completed with skipped={} (no replyto)",
-              correlationId,
-              result.skipped()
-          );
-          return;
-        }
-
         final SyncMarketsResponse syncResponse = SyncMarketsResponse.newBuilder()
             .setSkipped(result.skipped())
             .build();
+        final String destination = appProperties.getSync().getResponseTopic();
         final boolean sent = eventSender.send(
-            replyTo,
+            destination,
             syncResponse,
-            EventTypes.SYNC_MARKETS_RESPONSE
+            EventTypes.SYNC_MARKETS_RESPONSE,
+            correlationId == null || correlationId.isBlank()
+                ? Map.of()
+                : Map.of(EventSender.CORRELATION_ID_EXTENSION, correlationId)
         );
         if (!sent) {
           log.error("Failed to dispatch SyncMarketsResponse for correlation {}", correlationId);

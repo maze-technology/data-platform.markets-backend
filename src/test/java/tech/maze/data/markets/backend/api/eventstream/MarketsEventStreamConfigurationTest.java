@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -25,9 +26,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import tech.maze.commons.eventstream.EventSender;
+import tech.maze.data.markets.backend.AppProperties;
 import tech.maze.data.markets.backend.domain.models.SyncMarketsResult;
 import tech.maze.data.markets.backend.domain.ports.in.SyncMarketsUseCase;
-import tech.maze.dtos.markets.enums.Type;
 import tech.maze.dtos.markets.events.EventTypes;
 import tech.maze.dtos.markets.models.MarketMetaDatas;
 import tech.maze.dtos.markets.models.MarketMetaDatasMarket;
@@ -48,15 +49,18 @@ class MarketsEventStreamConfigurationTest {
   @Mock
   private MarketMetaDatasEventService marketMetaDatasEventService;
 
+  private AppProperties appProperties;
   private MarketsEventStreamConfiguration configuration;
 
   @BeforeEach
   void setUp() {
+    appProperties = new AppProperties();
     configuration = new MarketsEventStreamConfiguration(
         eventSender,
         meterRegistryProvider,
         syncMarketsUseCase,
-        marketMetaDatasEventService
+        marketMetaDatasEventService,
+        appProperties
     );
   }
 
@@ -72,11 +76,11 @@ class MarketsEventStreamConfigurationTest {
 
     consumer.accept(event);
 
-    verify(syncMarketsUseCase, never()).startSync(anyString(), any());
+    verify(syncMarketsUseCase, never()).startSync(anyString());
   }
 
   @Test
-  void startsSyncWhenReplyToPresent() {
+  void startsSyncWithCorrelationId() {
     Consumer<CloudEvent> consumer = configuration.syncMarketsRequestConsumer();
     CloudEvent event = CloudEventBuilder.v1()
         .withId("evt-sync")
@@ -86,12 +90,11 @@ class MarketsEventStreamConfigurationTest {
         .build();
 
     when(eventSender.resolveCorrelationId(event)).thenReturn("corr-1");
-    when(eventSender.resolveReplyTo(event)).thenReturn("reply-topic");
-    when(syncMarketsUseCase.startSync("corr-1", "reply-topic")).thenReturn(true);
+    when(syncMarketsUseCase.startSync("corr-1")).thenReturn(true);
 
     consumer.accept(event);
 
-    verify(syncMarketsUseCase).startSync("corr-1", "reply-topic");
+    verify(syncMarketsUseCase).startSync("corr-1");
   }
 
   @Test
@@ -102,7 +105,7 @@ class MarketsEventStreamConfigurationTest {
         .setDataProviderId(Value.newBuilder().setStringValue(providerId).build())
         .setMarket(
             MarketMetaDatasMarket.newBuilder()
-                .setType(Type.SPOT)
+                .setType(tech.maze.dtos.markets.enums.Type.SPOT)
                 .setExchangeId(Value.newBuilder().setStringValue("binance").build())
                 .setBaseId(Value.newBuilder().setStringValue("BTC").build())
                 .setQuoteId(Value.newBuilder().setStringValue("USDT").build())
@@ -113,7 +116,7 @@ class MarketsEventStreamConfigurationTest {
         .build();
     FetchMarketsResponse response = FetchMarketsResponse.newBuilder()
         .setIsLast(true)
-        .setSkipped(3)
+        .setSkipped(2)
         .setDataProvider(Value.newBuilder().setStringValue("dp-1").build())
         .setMarketMetaDatas(metaDatas)
         .build();
@@ -125,13 +128,14 @@ class MarketsEventStreamConfigurationTest {
         .build();
 
     when(eventSender.resolveCorrelationId(event)).thenReturn("corr-1");
-    when(syncMarketsUseCase.onFetchResponse("corr-1", "dp-1", 3L, true))
-        .thenReturn(Optional.of(new SyncMarketsResult(3L, "reply-topic")));
+    when(syncMarketsUseCase.onFetchResponse("corr-1", "dp-1", 2L, true))
+        .thenReturn(Optional.of(new SyncMarketsResult(2L)));
     when(
         eventSender.send(
-            eq("reply-topic"),
+            eq("markets.sync.response"),
             any(SyncMarketsResponse.class),
-            eq(EventTypes.SYNC_MARKETS_RESPONSE)
+            eq(EventTypes.SYNC_MARKETS_RESPONSE),
+            anyMap()
         )
     ).thenReturn(true);
 
@@ -139,9 +143,10 @@ class MarketsEventStreamConfigurationTest {
 
     verify(marketMetaDatasEventService).process(metaDatas);
     verify(eventSender).send(
-        eq("reply-topic"),
+        eq("markets.sync.response"),
         any(SyncMarketsResponse.class),
-        eq(EventTypes.SYNC_MARKETS_RESPONSE)
+        eq(EventTypes.SYNC_MARKETS_RESPONSE),
+        anyMap()
     );
   }
 
@@ -154,8 +159,7 @@ class MarketsEventStreamConfigurationTest {
         .withData(BytesCloudEventData.wrap(new byte[0]))
         .build();
     when(eventSender.resolveCorrelationId(event)).thenReturn(null);
-    when(eventSender.resolveReplyTo(event)).thenReturn("reply-topic");
-    when(syncMarketsUseCase.startSync(anyString(), eq("reply-topic"))).thenReturn(false);
+    when(syncMarketsUseCase.startSync(anyString())).thenReturn(false);
 
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     when(meterRegistryProvider.getIfAvailable()).thenReturn(registry);
