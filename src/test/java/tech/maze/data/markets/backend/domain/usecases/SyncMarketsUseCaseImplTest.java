@@ -44,7 +44,7 @@ class SyncMarketsUseCaseImplTest {
         anyMap()
     )).thenReturn(true);
 
-    assertThat(useCase.startSync("corr-1", "reply-topic")).isTrue();
+    assertThat(useCase.startSync("corr-1")).isTrue();
     verify(eventSender).send(
         eq("markets.fetch.request"),
         any(FetchMarketsRequest.class),
@@ -56,13 +56,12 @@ class SyncMarketsUseCaseImplTest {
   @Test
   void completesOnlyAfterAllExpectedProvidersReportLast() {
     when(eventSender.send(any(), any(), any(), anyMap())).thenReturn(true);
-    useCase.startSync("corr-1", "reply-topic");
+    useCase.startSync("corr-1");
 
     assertThat(useCase.onFetchResponse("corr-1", "dp-a", 1, true)).isEmpty();
 
     Optional<SyncMarketsResult> result = useCase.onFetchResponse("corr-1", "dp-b", 2, true);
     assertThat(result).isPresent();
     assertThat(result.get().skipped()).isEqualTo(3);
-    assertThat(result.get().replyTo()).isEqualTo("reply-topic");
   }
 }
