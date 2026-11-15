@@ -5,7 +5,6 @@ import com.google.protobuf.Value;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.CloudEventData;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -22,9 +21,9 @@ import tech.maze.commons.eventstream.MazeEventProperties;
 import tech.maze.data.markets.backend.AppProperties;
 import tech.maze.data.markets.backend.domain.models.SyncMarketsResult;
 import tech.maze.data.markets.backend.domain.ports.in.SyncMarketsUseCase;
+import tech.maze.data.markets.backend.infrastructure.sync.SyncMarketsResponsePublisher;
 import tech.maze.dtos.markets.events.EventTypes;
 import tech.maze.dtos.markets.payloads.FetchMarketsResponse;
-import tech.maze.dtos.markets.payloads.SyncMarketsResponse;
 
 /**
  * Event stream configuration for markets Sync/Fetch orchestration.
@@ -44,6 +43,7 @@ public class MarketsEventStreamConfiguration {
   SyncMarketsUseCase syncMarketsUseCase;
   MarketMetaDatasEventService marketMetaDatasEventService;
   AppProperties appProperties;
+  SyncMarketsResponsePublisher syncMarketsResponsePublisher;
 
   /**
    * Handles SyncMarketsRequest: starts correlation and fans out FetchMarketsRequest.
@@ -108,25 +108,14 @@ public class MarketsEventStreamConfiguration {
       final Optional<SyncMarketsResult> completed = syncMarketsUseCase.onFetchResponse(
           correlationId,
           dataProvider,
+          response.getPageIndex(),
           response.getSkipped(),
           response.getIsLast()
       );
 
       completed.ifPresent(result -> {
-        final SyncMarketsResponse syncResponse = SyncMarketsResponse.newBuilder()
-            .setSkipped(result.skipped())
-            .build();
-        final String destination = appProperties.getSync().getResponseTopic();
-        final boolean sent = eventSender.send(
-            destination,
-            syncResponse,
-            EventTypes.SYNC_MARKETS_RESPONSE,
-            correlationId == null || correlationId.isBlank()
-                ? Map.of()
-                : Map.of(EventSender.CORRELATION_ID_EXTENSION, correlationId)
-        );
+        final boolean sent = syncMarketsResponsePublisher.publish(correlationId, result);
         if (!sent) {
-          log.error("Failed to dispatch SyncMarketsResponse for correlation {}", correlationId);
           incrementFailure(EventTypes.SYNC_MARKETS_RESPONSE);
         }
       });
