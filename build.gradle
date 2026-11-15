@@ -21,7 +21,7 @@ ext {
   springBootVersion           = "4.0.7"
   nettyVersion               = "4.2.17.Final"
   mazeCommonsVersion          = "v0.0.22"
-  mazeDtosMarketsVersion      = "v0.0.12"
+  mazeDtosMarketsVersion      = "v0.0.13"
   protobufJavaVersion         = "4.35.0"
   grpcSpringBootVersion       = "1.0.3"
   testContainersVersion       = "2.0.5"
@@ -46,14 +46,6 @@ repositories {
   gradlePluginPortal()
 
   maven {
-    url "https://repo.spring.io/milestone"
-  }
-
-  maven {
-    url "https://repo.spring.io/release"
-  }
-
-  maven {
     url System.getenv("GITLAB_MAVEN_URL") ?: "https://scm.maze.trading/api/v4/groups/6/-/packages/maven"
 
     // GitLab group Package Registry (data-platform). Prefer GITLAB_MAVEN_* (Deploy Token /
@@ -65,6 +57,13 @@ repositories {
         .find { it != null && !it.trim().isEmpty() }
     }
   }
+
+  // milestone only: anonymous /release downloads return 401 and abort Gradle
+  // resolution (Jan 2023). Releases/milestones for Boot 4+ are on Maven Central.
+  maven {
+    url "https://repo.spring.io/milestone"
+  }
+
 }
 
 dependencyManagement {
@@ -168,6 +167,9 @@ dependencies {
 
   // Protobuf Java Util
   implementation "com.google.protobuf:protobuf-java-util:$protobufJavaVersion"
+
+  // Valkey/Redis (optional; enabled when maze.sync.session-store=redis)
+  implementation "org.springframework.boot:spring-boot-starter-data-redis"
 
   // Database
   implementation "org.springframework.boot:spring-boot-starter-data-jpa"

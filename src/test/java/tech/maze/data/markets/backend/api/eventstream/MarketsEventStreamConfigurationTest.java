@@ -29,11 +29,11 @@ import tech.maze.commons.eventstream.EventSender;
 import tech.maze.data.markets.backend.AppProperties;
 import tech.maze.data.markets.backend.domain.models.SyncMarketsResult;
 import tech.maze.data.markets.backend.domain.ports.in.SyncMarketsUseCase;
+import tech.maze.data.markets.backend.infrastructure.sync.SyncMarketsResponsePublisher;
 import tech.maze.dtos.markets.events.EventTypes;
 import tech.maze.dtos.markets.models.MarketMetaDatas;
 import tech.maze.dtos.markets.models.MarketMetaDatasMarket;
 import tech.maze.dtos.markets.payloads.FetchMarketsResponse;
-import tech.maze.dtos.markets.payloads.SyncMarketsResponse;
 
 @ExtendWith(MockitoExtension.class)
 class MarketsEventStreamConfigurationTest {
@@ -49,6 +49,9 @@ class MarketsEventStreamConfigurationTest {
   @Mock
   private MarketMetaDatasEventService marketMetaDatasEventService;
 
+  @Mock
+  private SyncMarketsResponsePublisher syncMarketsResponsePublisher;
+
   private AppProperties appProperties;
   private MarketsEventStreamConfiguration configuration;
 
@@ -60,7 +63,8 @@ class MarketsEventStreamConfigurationTest {
         meterRegistryProvider,
         syncMarketsUseCase,
         marketMetaDatasEventService,
-        appProperties
+        appProperties,
+        syncMarketsResponsePublisher
     );
   }
 
@@ -128,26 +132,14 @@ class MarketsEventStreamConfigurationTest {
         .build();
 
     when(eventSender.resolveCorrelationId(event)).thenReturn("corr-1");
-    when(syncMarketsUseCase.onFetchResponse("corr-1", "dp-1", 2L, true))
-        .thenReturn(Optional.of(new SyncMarketsResult(2L)));
-    when(
-        eventSender.send(
-            eq("markets.sync.response"),
-            any(SyncMarketsResponse.class),
-            eq(EventTypes.SYNC_MARKETS_RESPONSE),
-            anyMap()
-        )
-    ).thenReturn(true);
-
+    when(syncMarketsUseCase.onFetchResponse("corr-1", "dp-1", 0, 2L, true))
+        .thenReturn(Optional.of(SyncMarketsResult.completed(2L)));
+    when(syncMarketsResponsePublisher.publish(eq("corr-1"), any(SyncMarketsResult.class)))
+        .thenReturn(true);
     consumer.accept(event);
 
     verify(marketMetaDatasEventService).process(metaDatas);
-    verify(eventSender).send(
-        eq("markets.sync.response"),
-        any(SyncMarketsResponse.class),
-        eq(EventTypes.SYNC_MARKETS_RESPONSE),
-        anyMap()
-    );
+    verify(syncMarketsResponsePublisher).publish(eq("corr-1"), any(SyncMarketsResult.class));
   }
 
   @Test
@@ -177,6 +169,7 @@ class MarketsEventStreamConfigurationTest {
     verify(syncMarketsUseCase, never()).onFetchResponse(
         anyString(),
         anyString(),
+        org.mockito.ArgumentMatchers.anyInt(),
         anyLong(),
         anyBoolean()
     );
